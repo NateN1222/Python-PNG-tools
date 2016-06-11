@@ -34,6 +34,10 @@ class Pixels(object):
         self.pixels = []
 
 
+
+
+
+
 f = open("test.csv", 'rb') 
 try:
     reader = csv.reader(f)
@@ -44,17 +48,15 @@ finally:
     
     
 # read image data
-fh = open('test2.png','rb')
+fh = open('test.png','rb')
 data = binascii.hexlify(fh.read())
 debug = fh.read()
 fh.close()
 # write raw hex to a textfile
-fh = open('test2.txt','w')
+fh = open('test.txt','w')
 fh.write(data)
 fh.close
 fh.close()
-
-
 
 #test for the universal PNG file signature
 if data[0:16] == "89504e470d0a1a0a":
@@ -62,45 +64,91 @@ if data[0:16] == "89504e470d0a1a0a":
 else:
     print("Invalid Signature. Testing anyway...")
 
-critical = {"IHDR","PLTE","IDAT",""}
-ancillary = {"cHRM","gAMA","iCCP","sBit","sRGB","bKGD","hIST","tRNS","pHYs","sPLT","tIME","iTXt","tEXt","zTXt"}
-keywords = {"Title","Author","Description","Copyright","Creation Time","Software","Disclaimer","Warning","Source","Comment"}
+# critical ones will just be searched for manually because they are certain 
+# to be found
+keywords = ["IHDR","IDAT","IEND","cHRM","gAMA","iCCP","sBit","sRGB","bKGD",
+"hIST","tRNS","pHYs","sPLT","tIME","iTXt","tEXt","zTXt","Title","Author",
+"Description","Copyright","Creation Time","Software","Disclaimer","Warning",
+"Source","Comment"]
 
 print("searching for ancillary flags...")
 
-foundAncillary = []
-wordhex = ""
-for i in range(0,len(ancillary)):
-    wordHex = binascii.hexlify(ancillary[i])    
-    index = data.find(wordHex) 
-
-    if index == -1:
-        print(str(ancillary[i])+" not found...")
-    else:
-        print(str(ancillary[i]+"found."))
-        foundAncillary.push({keywords[i],index,index + len(wordHex)})
-    
-    
-print("searching for keywords...")
-    
 foundKeywords = []
+index = -1
+wordhex = ""
+
 
 for i in keywords:
-    wordHex = binascii.hexlify(keywords[i])        
-    index = data.find(wordHex) 
+    wordHex = binascii.hexlify(i)
+    index = data.find(wordHex)
+
     if index == -1:
-        print(str(keywords[i])+" not found...")
+        print(i+" not found...")
     else:
-        print(str(keywords[i]+"found."))
-        foundKeywords.push({keywords[i],index,(index+len(wordHex))})
-        
+        print(i+" found.")
+        foundKeywords.append([i,index,index + len(wordHex)])
+        # foundkeywords format: keyword, start address, end address
+
+# figure out order of flags and then determine whether or not        
+# PNG is valid according to PNG spec
+# TODO: test for duplicates
+print(type(foundKeywords))
 
 
+foundKeywords.sort(key=lambda x: x[1])
+
+
+IDATindex = data.find("49444154")
+PLTEindex = data.find("504c5445")
+#Name  Multiple  Ordering constraints
+#        OK?
+#   
+#cHRM    No      Before PLTE and IDAT
+#gAMA    No      Before PLTE and IDAT
+#iCCP    No      Before PLTE and IDAT
+#sBIT    No      Before PLTE and IDAT
+#sRGB    No      Before PLTE and IDAT
+#bKGD    No      After PLTE; before IDAT
+#hIST    No      After PLTE; before IDAT
+#tRNS    No      After PLTE; before IDAT
+#pHYs    No      Before IDAT
+#sPLT    Yes     Before IDAT
+#tIME    No      None
+#iTXt    Yes     None
+#tEXt    Yes     None
+
+
+# just assume the PNG data isn't absolutely FUBAR
+
+for i in foundKeywords:
+    if (i[0] == "cHRM")|(i[0] == "gAMA")|(i[0] == "iCCP")|(i[0] == "sBIT")|(i[0] == "sRGB"):
+        if ((i[1] > PLTEindex) & (i[1] > IDATindex)):
+            print("--------error 1--------")
+    if (i[0] == "bKGD")|(i[0] == "hIST")|(i[0] == "tRNS"):
+        if (i[1] < PLTEindex)|(i[1] > IDATindex):
+            print("--------error 2--------")
+    if(i[0] == "pHYs")|(i[0] == "sPLT"):
+        if(i[1] > IDATindex):
+            print("--------error 3--------")
+# now break into chunks, store into dictionary.
+# format: {Name:Chunk}
+
+next_ = None
+l = len(foundKeywords)
+chunks = {}
+for index, obj in enumerate(foundKeywords):
+    if index < (l - 1):
+        next_ = foundKeywords[index + 1]    
+        chunks[obj[0]] = (data[obj[2]:next_[1]])
+    else: 
+        chunks[obj[0]] = data[obj[2]:len(data)]
+            
+# extract the actual image data between IDAT and IEND
+Imghex = chunks["IDAT"] # this should just use the dictionary....
 
 # extract IHDR block
-IHDRindex = data.find("49484452") + 8 
-IHDRend =IHDRindex + 26 # 13 bytes = 26 nibbles
-IHDRblock = data[IHDRindex:IHDRend]
+# move this block to a DEF later?
+IHDRblock = chunks["IHDR"]
 Width = int(IHDRblock[0:8],16)
 Height = int(IHDRblock[8:16],16)
 Area = Width*Height
@@ -109,23 +157,19 @@ Colortype = int(IHDRblock[19:20],16) # if this is 3, PLTE chunk exists
 hCompression = int(IHDRblock[21:22],16)
 Filter = int(IHDRblock[23:24],16)
 Interlace = int(IHDRblock[25:26],16)
-#read pHYs block
-pHYsindex = data.find("704859730d0a") + 12
-pHYsend = pHYsindex + 18
-pHYsblock = data[pHYsindex:pHYsend]
-ppuX = int(pHYsblock[0:8],16)
-ppuY = int(pHYsblock[8:16],16)
-unit = int(pHYsblock[16:18],16)
 
 
 # extract the actual image data between IDAT and IEND
-Imghex = data[data.find("49444154") + 8:data.find("49454e44")] 
-print(len(Imghex))
 
-pixels = Pixels()
+# extract PLTE if it exists
 
-Ancillary = {"cHRM","gAMA","iCCP","sBit","sRGB","bKGD","hIST","tRNS","pHYs","sPLT",
-"tIME","iTXt","tEXt","zTXt"}
+#print(chunks["IDAT"])
+print("\n"+"------------------------------------"+"\n")
+
+test = "this is a test ok ladsZZZabdcefgjog"
+
+print(test[test.find("lads")+4:test.find("abdcef")])
+
 
 """""
 IDEA: rework this to just automatically break into chunks when 
@@ -143,26 +187,6 @@ it finds these keywords so they can be easily parsed
            PLTE    No      Before IDAT
            IDAT    Yes     Multiple IDATs must be consecutive
            IEND    No      Must be last
-   
-   Ancillary chunks (need not appear in this order):
-   
-           Name  Multiple  Ordering constraints
-                   OK?
-   
-           cHRM    No      Before PLTE and IDAT
-           gAMA    No      Before PLTE and IDAT
-           iCCP    No      Before PLTE and IDAT
-           sBIT    No      Before PLTE and IDAT
-           sRGB    No      Before PLTE and IDAT
-           bKGD    No      After PLTE; before IDAT
-           hIST    No      After PLTE; before IDAT
-           tRNS    No      After PLTE; before IDAT
-           pHYs    No      Before IDAT
-           sPLT    Yes     Before IDAT
-           tIME    No      None
-           iTXt    Yes     None
-           tEXt    Yes     None
-           zTXt    Yes     None
 
 Standard keywords for text chunks:
 
