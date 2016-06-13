@@ -1,4 +1,4 @@
 # Python-PNG-parsing
 
 
-this is a tool to chop up a PNG and get the data out of it
+This is a tool that is meant to get easy RGB data out of a PNG image. 
