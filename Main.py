@@ -5,49 +5,22 @@ Created on Thu Jun  9 18:16:58 2016
 @author: Nate Nichols
 
 """
-import csv
+
 import binascii
 import zlib
-import gzip
+import os
 
-
-#
-#class Pixels(object):
-#    
-#    def printPixels(self):
-#        temp = ""
-#        for i in range(1,self.count):
-#            temp = str(i)+": "            
-#            for j in range(0,3):
-#                temp = temp + (str(self.pixels[i][j]) + " ")
-#            print(temp)
-#        print(str(self.count))
-#                
-#    
-#    def newPixel(self,dat):    
-#        self.count = self.count + 1
-#        r = int(dat[1:2],16)
-#        g = int(dat[2:3],16)
-#        b = int(dat[4:5],16)        
-#        self.pixels.append([r,g,b])
-#    
-#    def __init__(self):
-#        self.count = 0
-#        self.pixels = []
-
-
-
-
-
-
-f = open("test.csv", 'rb') 
-try:
-    reader = csv.reader(f)
-    for row in reader:   
-        print row    
-finally:
-    f.close()      
+def genXml(pixels):
     
+# search the xml document for ss:Color=" in hex. 
+    
+    
+    with open("test.xml","rb") as f:
+        
+        
+        
+        
+        f.close()
     
 # read image data
 fh = open('test.png','rb')
@@ -57,7 +30,6 @@ fh.close()
 # write raw hex to a textfile
 fh = open('test.txt','w')
 fh.write(data)
-fh.close
 fh.close()
 
 #test for the universal PNG file signature
@@ -95,9 +67,7 @@ for i in keywords:
 # PNG is valid according to PNG spec
 # TODO: test for duplicates
 
-
 foundKeywords.sort(key=lambda x: x[1])
-
 
 IDATindex = data.find("49444154")
 PLTEindex = data.find("504c5445")
@@ -181,30 +151,24 @@ if zcolorType == 0:
     # 1,2,4,8,16 = allowed bitdepth
 
 elif zcolorType == 2:
-    # 8 or 16 bits per sample = 24 or 48 bits per pixel = 6 byte pixels
-    # RGB  
-    # filter (2 bytes) occurs at the end of a line
-    # characters per pixel: 
-    # remove all of the filter nibbles
-    # delete first char, skip width*3 chars, delete char....
-    
+    # 8 or 16 bits per sample = 24 or 48 bits per pixel = 6 or 12 nibbles per 
+    # pixel
+    # RGB 
     decompImgHex = list(binascii.hexlify(decompImgHex))
     
-    nibblesPerPixel = 6 # make this dynamic
+    nibblesPerPixel = (zbitDepth*3)/4 # make this dynamic
         
     for i in range(0,len(decompImgHex),nibblesPerPixel*zWidth):
         decompImgHex = decompImgHex[0:i] + decompImgHex[i+2:len(decompImgHex)]
     
-    for i in range(6,len(decompImgHex),6):         
-        print(decompImgHex[i-6],decompImgHex[i-5])
-        print(decompImgHex[i-4],decompImgHex[i-3])
-        print(decompImgHex[i-2],decompImgHex[i-1])
-        print("\n")
-
-
-    print "\n -------------- one:\n"
-    print (decompImgHex)
-    #print binascii.hexlify(decompImgHext)
+    for i in range(nibblesPerPixel,
+                   len(decompImgHex)+nibblesPerPixel,
+                   nibblesPerPixel):        
+        pixels.append([
+            int(decompImgHex[i-6] + decompImgHex[i-5],16), # TODO: add 12 nibble handling
+            int(decompImgHex[i-4] + decompImgHex[i-3],16),
+            int(decompImgHex[i-2] + decompImgHex[i-1],16),
+            ])
     
     
 #00
@@ -231,51 +195,7 @@ elif zcolorType == 6:
     debug = 420
     # 8,16    
     # RGBA
-    
-
-
-# -----------extract the actual image data between IDAT and IEND--------------
-#The IDAT chunk contains the actual image data. To create this data:
-#
-#    Begin with image scanlines represented as described in Image layout; the 
-# layout and total size of this raw data are determined by the fields of IHDR.
-#
-#    Filter the image data according to the filtering method specified by the 
-# IHDR chunk. (Note that with filter method 0, the only one currently defined, this implies prepending a filter-type byte to each scanline.)
-#
-#    Compress the filtered data using the compression method specified by the 
-#IHDR chunk. 
-
-
-
-
-
 
 #------------------------------------------------------------------------------
 print("\n"+"------------------------------------"+"\n")
-
-
-
-#0 
-#f f f 
-#0 0 0 
-#f f f 
-#0 0 0 
-#0 
-#0 0 0 
-#f f f
-#0 0 0
-#f f f 
-#0 
-#f f f 
-#0 0 0 
-#f f f 
-#0 0 0
-#0
-#0 0 0 
-#f f f
-#0 0 0 
-#f f f
-
-
 
